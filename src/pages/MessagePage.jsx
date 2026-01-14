@@ -1,99 +1,197 @@
-import { useEffect, useState } from "react";
-import { Container, Row, Col, ListGroup, Form, Button } from "react-bootstrap";
+import {
+  Container,
+  Row,
+  Col,
+  ListGroup,
+  Form,
+  Button,
+  Card,
+} from "react-bootstrap";
+import { useEffect, useState, useRef } from "react";
+import { useParams } from "react-router-dom";
 import { authFetch } from "../services/api";
 import { initSocket, getSocket } from "../services/socket";
 import { useAuth } from "../hooks/useAuth";
 
 export default function MessagePage() {
   const { user } = useAuth();
-  const [chats, setChats] = useState([]);
-  const [activeChat, setActiveChat] = useState(null);
+  const { conversationId } = useParams();
+  const [conversations, setConversations] = useState([]);
+  const [activeConv, setActiveConv] = useState(null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const messagesEndRef = useRef(null);
 
+  // 🔹 Scroll to bottom when messages change
+  const scrollToBottom = () =>
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+
+  // 🔹 Fetch conversations list
   useEffect(() => {
-    authFetch("/chats").then(res => res.json()).then(setChats);
-    initSocket().then((socket) => {
+    const fetchConversations = async () => {
+      try {
+        const res = await authFetch("/api/conversations");
+        const data = await res.json();
+        setConversations(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to fetch conversations:", err);
+      }
+    };
+    fetchConversations();
+  }, []);
+
+  // 🔹 Open conversation from URL param
+  useEffect(() => {
+    if (conversationId && conversations.length > 0) {
+      const conv = conversations.find(c => c.id == conversationId);
+      if (conv) {
+        openConversation(conv);
+      }
+    }
+  }, [conversationId, conversations]);
+
+  // 🔹 Initialize socket
+  useEffect(() => {
+    const setupSocket = async () => {
+      const socket = await initSocket();
       socket.on("receive_message", (msg) => {
-        if (msg.chatId === activeChat?.id) {
+        if (msg.chatId === activeConv?.id) {
           setMessages((prev) => [...prev, msg]);
         }
       });
-    });
-  }, [activeChat?.id]);
+    };
+    setupSocket();
+  }, [activeConv?.id]);
 
-  const openChat = async (chat) => {
-    setActiveChat(chat);
-    const res = await authFetch(`/chats/${chat.id}/messages`);
-    setMessages(await res.json());
+  // 🔹 Open conversation
+  const openConversation = async (conv) => {
+    setActiveConv(conv);
+    try {
+      const res = await authFetch(`/api/chats/${conv.id}/messages`);
+      const data = await res.json();
+      setMessages(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch messages:", err);
+      setMessages([]);
+    }
   };
 
+  // 🔹 Send message
   const sendMessage = async () => {
-    if (!text) return;
+    if (!text || !activeConv) return;
 
-    await authFetch("/chats/send", {
-      method: "POST",
-      body: JSON.stringify({
-        receiverUid:
-          activeChat.user1_uid === user.uid
-            ? activeChat.user2_uid
-            : activeChat.user1_uid,
-        content: text,
-      }),
-    });
-
-    getSocket().emit("send_message", {
-      receiverUid:
-        activeChat.user1_uid === user.uid
-          ? activeChat.user2_uid
-          : activeChat.user1_uid,
-      chatId: activeChat.id,
+    const receiverUid = activeConv.other_id;
+    const payload = {
+      chatId: activeConv.id,
       senderUid: user.uid,
+      receiverUid,
       content: text,
-    });
+    };
 
-    setMessages((prev) => [...prev, { sender_uid: user.uid, content: text }]);
+    // Emit via socket
+    try {
+      getSocket().emit("send_message", payload);
+    } catch (err) {
+      console.error("Socket send error:", err);
+    }
+
+    // Persist to DB
+    try {
+      await authFetch("/api/chats/send", {
+        method: "POST",
+        body: JSON.stringify({ receiverUid, content: text }),
+      });
+    } catch (err) {
+      console.error("Failed to persist message:", err);
+    }
+
+    setMessages((prev) => [...prev, payload]);
     setText("");
   };
 
+  useEffect(scrollToBottom, [messages]);
+
   return (
-    <Container fluid className="mt-3">
-      <Row>
+    <Container fluid className="mt-4">
+      <Row className="g-3">
+        {/* Conversations list */}
         <Col md={4}>
-          <ListGroup>
-            {chats.map((c) => (
-              <ListGroup.Item
-                key={c.id}
-                action
-                onClick={() => openChat(c)}
-              >
-                Chat #{c.id}
-              </ListGroup.Item>
-            ))}
-          </ListGroup>
+          <Card>
+            <Card.Header>Conversations</Card.Header>
+            <ListGroup variant="flush">
+              {conversations.length === 0 && (
+                <ListGroup.Item className="text-muted">
+                  No conversations yet
+                </ListGroup.Item>
+              )}
+              {conversations.map((conv) => (
+                <ListGroup.Item
+                  key={conv.id}
+                  action
+                  active={activeConv?.id === conv.id}
+                  onClick={() => openConversation(conv)}
+                  className="d-flex align-items-center gap-2"
+                >
+                  <img
+                    src={conv.other_image || "https://via.placeholder.com/40"}
+                    width={40}
+                    height={40}
+                    className="rounded-circle"
+                  />
+                  <span>{conv.other_name || "Unnamed User"}</span>
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          </Card>
         </Col>
 
+        {/* Active conversation */}
         <Col md={8}>
-          {activeChat ? (
-            <>
-              <div className="border p-3 mb-2" style={{ height: 350, overflowY: "auto" }}>
+          {activeConv ? (
+            <Card className="h-100 d-flex flex-column">
+              <Card.Header>
+                Chat with {activeConv.other_name || "User"}
+              </Card.Header>
+              <Card.Body className="flex-grow-1 overflow-auto">
                 {messages.map((m, i) => (
-                  <div key={i} className={m.sender_uid === user.uid ? "text-end" : ""}>
-                    <span className="badge bg-secondary">{m.content}</span>
+                  <div
+                    key={i}
+                    className={`mb-2 ${
+                      m.senderUid === user.uid ? "text-end" : ""
+                    }`}
+                  >
+                    <span
+                      className={`badge ${
+                        m.senderUid === user.uid ? "bg-primary" : "bg-secondary"
+                      }`}
+                    >
+                      {m.content}
+                    </span>
                   </div>
                 ))}
-              </div>
-
-              <Form className="d-flex">
-                <Form.Control
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                />
-                <Button onClick={sendMessage}>Send</Button>
-              </Form>
-            </>
+                <div ref={messagesEndRef} />
+              </Card.Body>
+              <Card.Footer>
+                <Form
+                  className="d-flex"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sendMessage();
+                  }}
+                >
+                  <Form.Control
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Type a message..."
+                  />
+                  <Button type="submit" className="ms-2">
+                    Send
+                  </Button>
+                </Form>
+              </Card.Footer>
+            </Card>
           ) : (
-            <p>Select a chat</p>
+            <p className="text-muted">Select a conversation to start chatting</p>
           )}
         </Col>
       </Row>

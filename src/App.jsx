@@ -4,7 +4,7 @@ import Footer from "./components/Footer";
 
 import HomePage from "./pages/HomePage";
 import JobsPage from "./pages/JobsPage";
-import FreelancersPage from "./pages/FreelancersPage";
+import FreelancersProfilePage from "./pages/FreelancersProfilePage";
 import MessagePage from "./pages/MessagePage";
 import PaymentPage from "./pages/PaymentPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -33,9 +33,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/jobs" element={<JobsPage />} />
-          <Route path="/freelancers" element={<FreelancersPage />} />
+         
           <Route
-            path="/messages"
+            path="/messages/:conversationId?"
             element={
               <ProtectedRoute>
                 <MessagePage />
@@ -60,6 +60,16 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/freelancer/:uid"
+            element={
+              <ProtectedRoute>
+                <FreelancersProfilePage />
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Routes>

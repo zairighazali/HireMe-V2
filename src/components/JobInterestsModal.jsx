@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { Modal, Button, ListGroup, Badge, Spinner } from "react-bootstrap";
 import { authFetch } from "../services/api";
+import { useNavigate } from "react-router-dom";
 
 export default function JobInterestsModal({ show, onHide, jobId, onHired }) {
   const [interests, setInterests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+   const navigate = useNavigate();
 
   // ===== FETCH INTERESTS =====
   const fetchInterests = useCallback(async () => {
@@ -19,10 +21,12 @@ export default function JobInterestsModal({ show, onHide, jobId, onHired }) {
         throw new Error(err.message || "Failed to fetch interests");
       }
 
-      const data = await response.json();
-      setInterests(data);
+      const respData = await response.json();
+      // Ambil array dari data field
+      setInterests(respData.data || []);
     } catch (error) {
       console.error("Failed to fetch interests:", error);
+      setInterests([]);
     } finally {
       setFetching(false);
     }
@@ -33,7 +37,6 @@ export default function JobInterestsModal({ show, onHide, jobId, onHired }) {
     if (show) {
       fetchInterests();
     } else {
-      // reset bila tutup modal
       setInterests([]);
     }
   }, [show, fetchInterests]);
@@ -118,16 +121,29 @@ export default function JobInterestsModal({ show, onHide, jobId, onHired }) {
                   )}
                 </div>
 
-                <Button
-                  variant="success"
-                  size="sm"
-                  disabled={loading || interest.status !== "pending"}
-                  onClick={() =>
-                    handleHire(interest.id, interest.freelancer_uid)
-                  }
-                >
-                  Hire
-                </Button>
+                <div className="d-flex gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      navigate(`/freelancer/${interest.freelancer_uid}`);
+                      onHide(); // tutup modal
+                    }}
+                  >
+                    View Profile
+                  </Button>
+
+                  <Button
+                    variant="success"
+                    size="sm"
+                    disabled={loading || interest.status !== "pending"}
+                    onClick={() =>
+                      handleHire(interest.id, interest.freelancer_uid)
+                    }
+                  >
+                    Hire
+                  </Button>
+                </div>
               </ListGroup.Item>
             ))}
           </ListGroup>
