@@ -22,7 +22,6 @@ export default function AppNavbar() {
           <Nav className="me-auto">
             <Nav.Link as={Link} to="/">Home</Nav.Link>
             <Nav.Link as={Link} to="/jobs">Jobs</Nav.Link>
-            <Nav.Link as={Link} to="/freelancers">Freelancers</Nav.Link>
 
             {user && (
               <>

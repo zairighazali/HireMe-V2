@@ -41,10 +41,10 @@ export default function FreelancerCard({ freelancer }) {
         )}
 
         <div className="d-flex gap-2">
-          <Button as={Link} to={`/profile/${freelancer.uid}`} variant="outline-primary" size="sm">
+          <Button as={Link} to={`/freelancer/${freelancer.uid}`} variant="outline-primary" size="sm">
             View Profile
           </Button>
-          <Button variant="primary" size="sm">
+          <Button as={Link} to="/messages" variant="primary" size="sm">
             Contact
           </Button>
         </div>

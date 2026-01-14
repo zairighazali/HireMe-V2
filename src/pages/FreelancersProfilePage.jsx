@@ -8,20 +8,31 @@ import {
 } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 import { authFetch } from "../services/api";
 
 export default function FreelancerProfilePage() {
   const { uid } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth(); // cek login
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [chatLoading, setChatLoading] = useState(false);
 
-  // 🔹 Fetch freelancer profile
+  // 🔹 Fetch freelancer profile (public untuk guest, authFetch kalau logged in optional)
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await authFetch(`/api/users/${uid}`);
+        let res;
+        if (user?.uid) {
+          // Logged in → pakai authFetch
+          res = await authFetch(`/api/users/${uid}`);
+        } else {
+          // Guest → public endpoint
+          const url = `${import.meta.env.VITE_API_URL}/api/users/public/${uid}`;
+          res = await fetch(url);
+        }
+
         if (!res.ok) throw new Error("Failed to fetch profile");
         const data = await res.json();
 
@@ -36,15 +47,18 @@ export default function FreelancerProfilePage() {
         });
       } catch (err) {
         console.error("Failed to fetch freelancer profile:", err);
+        setProfile(null);
       } finally {
         setLoading(false);
       }
     };
-    fetchProfile();
-  }, [uid]);
 
-  // 🔹 Start chat
+    fetchProfile();
+  }, [uid, user]);
+
+  // 🔹 Start chat (hanya jika logged in)
   const handleChat = async () => {
+    if (!user?.uid) return alert("You must be logged in to start chat");
     if (!profile?.firebase_uid) return alert("Freelancer UID not found");
     if (chatLoading) return;
 
@@ -72,8 +86,15 @@ export default function FreelancerProfilePage() {
     }
   };
 
-  if (loading) return <div className="text-center py-5"><Spinner animation="border" /></div>;
-  if (!profile) return <p className="text-center text-muted">Freelancer not found</p>;
+  if (loading)
+    return (
+      <div className="text-center py-5">
+        <Spinner animation="border" />
+      </div>
+    );
+
+  if (!profile)
+    return <p className="text-center text-muted">Freelancer not found</p>;
 
   return (
     <Container className="pt-5 mt-4">
@@ -94,7 +115,8 @@ export default function FreelancerProfilePage() {
               <Button
                 variant="primary"
                 onClick={handleChat}
-                disabled={chatLoading}
+                disabled={chatLoading || !user?.uid}
+                title={!user?.uid ? "Login to start chat" : ""}
               >
                 {chatLoading ? "Opening..." : "Chat"}
               </Button>

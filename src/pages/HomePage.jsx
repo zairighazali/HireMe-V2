@@ -1,77 +1,100 @@
-import { Container, Carousel, Form, Row, Col, Card } from "react-bootstrap";
+// HomePage.jsx
+import { Container, Carousel, Form, Row, Col } from "react-bootstrap";
 import { useState, useEffect } from "react";
 import FreelancerCard from "../components/FreelancerCard";
+import { useAuth } from "../hooks/useAuth";
+import { authFetch } from "../services/api";
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [freelancers, setFreelancers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const API = import.meta.env.VITE_API_URL;
 
+  // 🔹 Fetch freelancers, public or auth
+  const fetchFreelancers = async (q = "") => {
+  setLoading(true);
+  try {
+    let url;
+
+    if (user) {
+      // logged in
+      url = `/api/users/freelancers${q ? `?q=${encodeURIComponent(q)}` : ""}`;
+      const res = await authFetch(url);
+      if (!res.ok) throw new Error("Auth fetch failed");
+      setFreelancers(await res.json());
+    } else {
+      // guest
+      url = `${API}/api/users/public/freelancers${q ? `?q=${encodeURIComponent(q)}` : ""}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Public fetch failed");
+      setFreelancers(await res.json());
+    }
+  } catch (err) {
+    console.error("Failed to fetch freelancers:", err);
+    setFreelancers([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // 🔹 Initial fetch on mount / user change
   useEffect(() => {
     fetchFreelancers();
-  }, []);
+  }, [user]);
 
-  const fetchFreelancers = async () => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/users/freelancers`);
-      if (response.ok) {
-        const data = await response.json();
-        setFreelancers(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch freelancers:", error);
-    } finally {
-      setLoading(false);
-    }
+  // 🔹 Search handler
+  const handleSearch = (e) => {
+    const val = e.target.value;
+    setSearch(val);
+    fetchFreelancers(val);
   };
-
-  const filtered = freelancers.filter(freelancer =>
-    freelancer.name?.toLowerCase().includes(search.toLowerCase()) ||
-    freelancer.skills?.toLowerCase().includes(search.toLowerCase()) ||
-    freelancer.bio?.toLowerCase().includes(search.toLowerCase())
-  );
 
   return (
     <>
-      {/* Carousel */}
+      {/* ===== Carousel ===== */}
       <Carousel>
         <Carousel.Item>
-          <img className="d-block w-100" src="https://via.placeholder.com/1200x400" />
+          <img
+            className="d-block w-100"
+            src="https://via.placeholder.com/1200x400"
+            alt="Landing banner"
+          />
         </Carousel.Item>
       </Carousel>
 
-      {/* Hero */}
-      <Container className="container text-center text-black">
-          <h1 className="fw-bold display-5">
-            Hire <span className="text-primary">top freelancers</span> in minutes
-          </h1>
-
-          <p className="fs-5 mb-4 opacity-75">
-            Search, hire, and work with skilled professionals.
-          </p>
+      {/* ===== Hero + Search ===== */}
+      <Container className="text-center text-black mt-4">
+        <h1 className="fw-bold display-5">
+          Hire <span className="text-primary">top freelancers</span> in minutes
+        </h1>
+        <p className="fs-5 mb-4 opacity-75">
+          Search, hire, and work with skilled professionals.
+        </p>
 
         <Form.Control
           placeholder="Search freelancer by skill..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={handleSearch}
         />
         <p className="small mt-3 opacity-50">
-            Example searches: Web Developer, Graphic Designer, Musician
-          </p>
+          Example searches: Web Developer, Graphic Designer, Musician
+        </p>
       </Container>
 
-      {/* Search Result */}
-      <Container>
+      {/* ===== Search Results ===== */}
+      <Container className="mt-4">
         <h3 className="mb-4">Available Freelancers</h3>
         {loading ? (
           <p>Loading freelancers...</p>
-        ) : filtered.length === 0 ? (
+        ) : freelancers.length === 0 ? (
           <p className="text-muted">No freelancers found matching your search.</p>
         ) : (
           <Row>
-            {filtered.map((freelancer) => (
-              <Col md={4} key={freelancer.uid} className="mb-4">
-                <FreelancerCard freelancer={freelancer} />
+            {freelancers.map((f) => (
+              <Col md={4} key={f.uid} className="mb-4">
+                <FreelancerCard freelancer={f} />
               </Col>
             ))}
           </Row>
